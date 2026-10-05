@@ -78,6 +78,9 @@
     .env-guide { background-color: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
     .env-guide h4 { color: var(--accent-blue); font-size: 0.95rem; margin-bottom: 0.5rem; }
     .env-guide ol { margin-left: 1.25rem; font-size: 0.875rem; color: var(--text-muted); line-height: 1.5; }
+    .qr-access { display: flex; align-items: center; gap: 0.75rem; }
+    .qr-access span { overflow-wrap: anywhere; }
+    .qr-access img { width: 112px; height: 112px; padding: 0.25rem; background: #fff; border-radius: 6px; object-fit: contain; flex-shrink: 0; }
 
     .sdp-item { background-color: #0f172a; border-left: 3px solid var(--accent-blue); padding: 0.5rem 0.75rem; margin-bottom: 0.5rem; font-family: monospace; font-size: 0.8rem; border-radius: 0 4px 4px 0; }
     .sdp-key { color: var(--accent-amber); font-weight: bold; }
@@ -199,7 +202,12 @@
           <div>
             <strong style="color: var(--accent-green); font-size: 0.85rem;">Trường hợp 2: Chạy trên 2 Máy tính (Mạng LAN Wifi)</strong>
             <ol>
-              <li>Mở file HTML này trên Máy A và Máy B (cùng nối 1 Wifi/Router LAN). Máy A &amp; B cùng truy cập vào link https://vqhungnew.github.io/WebRTC/index.html </li>
+              <li>
+                <div class="qr-access">
+                  <span>Mở file HTML này trên Máy A và Máy B (cùng nối 1 Wifi/Router LAN). Máy A &amp; B cùng truy cập vào link <a href="https://hieulu0105.github.io/DemoLTM/" target="_blank" rel="noopener noreferrer">https://hieulu0105.github.io/DemoLTM/</a></span>
+                  <img src="QR.png" alt="QR code to open the WebRTC lab link">
+                </div>
+              </li>
               <li>Làm quy trình gửi Signal tương tự như trên qua <b>Zalo/Messenger/Email</b>.</li>
               <li><b>LƯU Ý QUAN TRỌNG:</b> Sau khi bấm "Tạo OFFER", cần <b>chờ 2-3 giây</b> để trình duyệt quét địa chỉ IP LAN (ICE Candidates) trước khi copy gửi đi!</li>
             </ol>

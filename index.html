@@ -214,6 +214,23 @@
           </div>
 
           <div class="card">
+            <div class="card-title"><span>Phòng riêng &amp; tên thành viên</span></div>
+            <label for="memberName">Tên hiển thị</label>
+            <input id="memberName" maxlength="30" placeholder="Ví dụ: Hải Tịnh" style="width:100%;padding:9px;margin:6px 0 12px;background:#111827;color:white;border:1px solid #475569;border-radius:6px">
+            <label for="roomCode">Mã phòng</label>
+            <input id="roomCode" value="NHOM15" maxlength="30" style="width:100%;padding:9px;margin:6px 0 12px;background:#111827;color:white;border:1px solid #475569;border-radius:6px">
+            <button class="btn" type="button" onclick="joinRoom()">Tham gia / Chuyển phòng</button>
+            <p id="roomStatus" class="theory-text">Phòng hiện tại: NHOM15</p>
+          </div>
+          <div class="card">
+            <div class="card-title"><span>Chat nhóm qua MQTT</span></div>
+            <div id="chatMessages" aria-live="polite" style="height:180px;overflow-y:auto;padding:10px;background:#0b1220;border-radius:6px;margin-bottom:8px;font-size:13px"></div>
+            <form id="chatForm" onsubmit="sendChat(event)" style="display:flex;gap:8px">
+              <input id="chatInput" maxlength="500" placeholder="Nhập tin nhắn..." style="min-width:0;flex:1;padding:9px;background:#111827;color:white;border:1px solid #475569;border-radius:6px">
+              <button class="btn" type="submit">Gửi</button>
+            </form>
+          </div>
+          <div class="card">
             <div class="card-title">
               <span>Danh Sách Client Trực Tuyến</span>
               <span id="clientCountBadge" class="badge badge-blue">1 Online</span>
@@ -507,12 +524,79 @@
     const myId = 'Client_' + Math.floor(Math.random() * 9000 + 1000);
     document.getElementById('myClientId').textContent = myId;
 
-    const topicName = "netprog/class/whiteboard/room_master";
-    const presenceTopic = "netprog/class/whiteboard/presence";
+    let currentRoom = 'NHOM15';
+    let memberName = 'Khách ' + myId.slice(-4);
+    function roomTopics(room) {
+      const prefix = `demoltm/nhom15/rooms/${room}`;
+      return { draw: `${prefix}/draw`, presence: `${prefix}/presence`, chat: `${prefix}/chat` };
+    }
+    let room = roomTopics(currentRoom);
+    let topicName = room.draw;
+    let presenceTopic = room.presence;
+    let chatTopic = room.chat;
+    let presenceTimer = null;
+
+    function announcePresence() {
+      if (client.connected) client.publish(presenceTopic, JSON.stringify({ id: myId, name: memberName, status: 'Active' }));
+    }
+    function joinRoom() {
+      const newName = document.getElementById('memberName').value.trim();
+      const newRoom = document.getElementById('roomCode').value.trim().toUpperCase();
+      if (!newName || !/^[A-Z0-9_-]{3,30}$/.test(newRoom)) {
+        alert('Nhập tên và mã phòng (3–30 ký tự A-Z, 0-9, _ hoặc -).');
+        return;
+      }
+      const oldTopics = [topicName, presenceTopic, chatTopic];
+      const changed = currentRoom !== newRoom;
+      if (changed && client.connected) client.unsubscribe(oldTopics);
+      memberName = newName;
+      currentRoom = newRoom;
+      room = roomTopics(currentRoom);
+      topicName = room.draw;
+      presenceTopic = room.presence;
+      chatTopic = room.chat;
+      if (changed) {
+        activeClients.clear();
+        blockedClients.clear();
+        fillBoardWhite();
+        document.getElementById('chatMessages').replaceChildren();
+      }
+      activeClients.set(myId, { id: myId, name: memberName, status: 'Đang hoạt động', lastSeen: Date.now() });
+      updateClientListUI();
+      document.getElementById('roomStatus').textContent = `Phòng hiện tại: ${currentRoom}`;
+      if (client.connected) {
+        client.subscribe([topicName, presenceTopic, chatTopic]);
+        announcePresence();
+      }
+      logNet(`Đã tham gia phòng ${currentRoom} với tên ${memberName}`);
+    }
+    function addChatMessage(name, message, time) {
+      const row = document.createElement('div');
+      row.style.marginBottom = '8px';
+      const who = document.createElement('strong');
+      who.textContent = `${name} (${new Date(time).toLocaleTimeString()}): `;
+      row.append(who, document.createTextNode(message));
+      const box = document.getElementById('chatMessages');
+      box.appendChild(row);
+      while (box.children.length > 100) box.firstChild.remove();
+      box.scrollTop = box.scrollHeight;
+    }
+    function sendChat(event) {
+      event.preventDefault();
+      const input = document.getElementById('chatInput');
+      const message = input.value.trim();
+      if (!message) return;
+      if (!client.connected) { alert('Chưa kết nối MQTT.'); return; }
+      const time = Date.now();
+      client.publish(chatTopic, JSON.stringify({ sender: myId, name: memberName, message, time }));
+      addChatMessage(memberName, message, time);
+      input.value = '';
+    }
+    document.getElementById('memberName').value = memberName;
 
     const activeClients = new Map();
     const blockedClients = new Set();
-    activeClients.set(myId, { id: myId, status: 'Đang hoạt động', lastSeen: Date.now() });
+    activeClients.set(myId, { id: myId, name: memberName, status: 'Đang hoạt động', lastSeen: Date.now() });
 
     function logNet(msg) {
       const logs = document.getElementById('netLogs');
@@ -534,7 +618,7 @@
         item.className = 'client-item';
         const identity = document.createElement('span');
         const name = document.createElement('b');
-        name.textContent = id;
+        name.textContent = `${client.name || id} (${id})`;
         identity.append(name, document.createTextNode(id === myId ? ' (Bạn)' : ''));
 
         const controls = document.createElement('span');
@@ -580,7 +664,7 @@
       document.getElementById('connStatus').textContent = 'Đã kết nối';
       document.getElementById('connStatus').className = 'badge badge-green';
 
-      client.subscribe([topicName, presenceTopic], (err) => {
+      client.subscribe([topicName, presenceTopic, chatTopic], (err) => {
         if (err) {
           logNet(`Không thể subscribe MQTT: ${err.message}`);
           return;
@@ -588,9 +672,9 @@
         logNet('Đã subscribe vào các topic của nhóm.');
       });
 
-      setInterval(() => {
-        client.publish(presenceTopic, JSON.stringify({ id: myId, status: 'Active' }));
-      }, 3000);
+      announcePresence();
+      if (presenceTimer) clearInterval(presenceTimer);
+      presenceTimer = setInterval(announcePresence, 3000);
     });
 
     client.on('reconnect', () => {
@@ -615,8 +699,13 @@
 
         if (topic === presenceTopic) {
           if (data.id && data.id !== myId && !blockedClients.has(data.id)) {
-            activeClients.set(data.id, { id: data.id, status: 'Trực tuyến', lastSeen: Date.now() });
+            activeClients.set(data.id, { id: data.id, name: String(data.name || data.id).slice(0, 30), status: 'Trực tuyến', lastSeen: Date.now() });
             updateClientListUI();
+          }
+        } else if (topic === chatTopic) {
+          if (data.sender === myId || blockedClients.has(data.sender)) return;
+          if (typeof data.message === 'string' && data.message.length <= 500) {
+            addChatMessage(String(data.name || data.sender).slice(0, 30), data.message, Number(data.time) || Date.now());
           }
         } else if (topic === topicName) {
           if (data.sender === myId) return;
